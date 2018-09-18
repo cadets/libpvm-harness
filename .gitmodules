@@ -1,0 +1,3 @@
+[submodule "modules/libpvm-rs"]
+	path = modules/libpvm-rs
+	url = git@github.com:cadets/libpvm-rs.git
