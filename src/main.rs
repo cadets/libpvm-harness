@@ -5,6 +5,8 @@ extern crate prometheus;
 extern crate clap;
 extern crate ctrlc;
 extern crate serde_json;
+extern crate log;
+extern crate env_logger;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -17,6 +19,8 @@ use kafka::consumer::Consumer;
 use opus::{cfg, engine, trace::cadets::TraceEvent};
 
 fn main() {
+    env_logger::init();
+    
     let args = app_from_crate!()
         .arg(
             Arg::with_name("khost")
