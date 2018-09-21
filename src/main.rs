@@ -56,7 +56,6 @@ fn main() {
             Arg::with_name("ingest")
                 .short("i")
                 .long("ingestion")
-                .required_unless("print")
                 .requires_all(&["db-host", "db-user", "db-pass"]),
         )
         .get_matches();
