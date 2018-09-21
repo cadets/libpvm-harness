@@ -34,19 +34,16 @@ fn main() {
         .arg(
             Arg::with_name("db-host")
                 .long("db-host")
-                .required(true)
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("db-user")
                 .long("db-user")
-                .required(true)
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("db-pass")
                 .long("db-pass")
-                .required(true)
                 .takes_value(true),
         )
         .arg(
@@ -59,7 +56,8 @@ fn main() {
             Arg::with_name("ingest")
                 .short("i")
                 .long("ingestion")
-                .required_unless("print"),
+                .required_unless("print")
+                .requires_all(&["db-host", "db-user", "db-pass"]),
         )
         .get_matches();
 
@@ -69,9 +67,6 @@ fn main() {
         .map(|v| v.to_string())
         .collect();
     let topic = args.value_of("topic").unwrap().to_string();
-    let db_host = args.value_of("db-host").unwrap().to_string();
-    let db_user = args.value_of("db-user").unwrap().to_string();
-    let db_pass = args.value_of("db-pass").unwrap().to_string();
     let print = args.is_present("print");
     let ingest = args.is_present("ingest");
 
@@ -89,6 +84,10 @@ fn main() {
     let mut engine = None;
 
     if ingest {
+        let db_host = args.value_of("db-host").unwrap().to_string();
+        let db_user = args.value_of("db-user").unwrap().to_string();
+        let db_pass = args.value_of("db-pass").unwrap().to_string();
+
         engine = Some(engine::Engine::new(cfg::Config {
             cfg_mode: cfg::CfgMode::Auto,
             db_server: db_host,
