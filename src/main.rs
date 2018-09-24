@@ -5,71 +5,88 @@ extern crate prometheus;
 extern crate clap;
 extern crate ctrlc;
 extern crate serde_json;
+extern crate toml;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate log;
 extern crate env_logger;
+extern crate openssl;
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    fs::File,
+    io::Read,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    }
 };
 
 use clap::Arg;
-use kafka::consumer::Consumer;
+use openssl::{
+    pkey::PKey,
+    ssl::{SslConnectorBuilder, SslContextBuilder, SslMethod, SSL_VERIFY_PEER},
+    x509::X509_FILETYPE_PEM,
+};
+use kafka::{
+    client::SecurityConfig,
+    consumer::Consumer
+};
 
 use opus::{cfg, engine, trace::cadets::TraceEvent};
 
+#[derive(Debug, Deserialize)]
+struct Config<'a>{
+    khost: Vec<String>,
+    topic: String,
+    #[serde(borrow)]
+    neo4j: Neo4jConfig<'a>,
+    #[serde(borrow)]
+    ssl: SSLConfig<'a>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Neo4jConfig<'a> {
+    db_host: &'a str,
+    db_user: &'a str,
+    db_pass: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+struct SSLConfig<'a> {
+    ca_file: &'a str,
+    cert_file: &'a str,
+    key_file: &'a str,
+    key_pass: &'a str,
+}
+
 fn main() {
     env_logger::init();
-    
+
     let args = app_from_crate!()
         .arg(
-            Arg::with_name("khost")
-                .long("khost")
-                .multiple(true)
+            Arg::with_name("cfg")
+                .long("cfg")
                 .takes_value(true)
                 .required(true),
-        )
-        .arg(
-            Arg::with_name("topic")
-                .long("topic")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("db-host")
-                .long("db-host")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("db-user")
-                .long("db-user")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("db-pass")
-                .long("db-pass")
-                .takes_value(true),
         )
         .arg(
             Arg::with_name("print")
                 .short("p")
                 .long("printing")
-                .required_unless("ingest"),
         )
         .arg(
             Arg::with_name("ingest")
                 .short("i")
                 .long("ingestion")
-                .requires_all(&["db-host", "db-user", "db-pass"]),
         )
         .get_matches();
 
-    let hosts = args
-        .values_of("khost")
-        .unwrap()
-        .map(|v| v.to_string())
-        .collect();
-    let topic = args.value_of("topic").unwrap().to_string();
+    let mut cfg_data = Vec::new();
+    File::open(args.value_of("cfg").unwrap()).unwrap().read_to_end(&mut cfg_data).unwrap();
+
+    let cfg = toml::from_slice::<Config>(&cfg_data).unwrap();
+
     let print = args.is_present("print");
     let ingest = args.is_present("ingest");
 
@@ -79,23 +96,36 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    let mut kafka = Consumer::from_hosts(hosts)
-        .with_topic(topic)
+    // OpenSSL offers a variety of complex configurations. Here is an example:
+    let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
+    {
+        let mut pem = Vec::new();
+        File::open(cfg.ssl.key_file).unwrap().read_to_end(&mut pem).unwrap();
+
+        let ctx = &mut builder as &mut SslContextBuilder;
+        ctx.set_cipher_list("DEFAULT").unwrap();
+        ctx.set_ca_file(cfg.ssl.ca_file).unwrap();
+        ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM).unwrap();
+        ctx.set_private_key(&PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap()).unwrap();
+        ctx.set_default_verify_paths().unwrap();
+        ctx.set_verify(SSL_VERIFY_PEER);
+    }
+    let connector = builder.build();
+
+    let mut kafka = Consumer::from_hosts(cfg.khost)
+        .with_topic(cfg.topic)
+        .with_security(SecurityConfig::new(connector))
         .create()
         .expect("Failed to create kafka client");
 
     let mut engine = None;
 
     if ingest {
-        let db_host = args.value_of("db-host").unwrap().to_string();
-        let db_user = args.value_of("db-user").unwrap().to_string();
-        let db_pass = args.value_of("db-pass").unwrap().to_string();
-
         engine = Some(engine::Engine::new(cfg::Config {
             cfg_mode: cfg::CfgMode::Auto,
-            db_server: db_host,
-            db_user: db_user,
-            db_password: db_pass,
+            db_server: cfg.neo4j.db_host.to_string(),
+            db_user: cfg.neo4j.db_user.to_string(),
+            db_password: cfg.neo4j.db_pass.to_string(),
             suppress_default_views: false,
             cfg_detail: None,
         }));
