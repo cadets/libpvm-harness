@@ -28,14 +28,11 @@ use std::{
 };
 
 use clap::Arg;
+use kafka::{client::SecurityConfig, consumer::Consumer};
 use openssl::{
     pkey::PKey,
     ssl::{SslConnectorBuilder, SslContextBuilder, SslMethod, SSL_VERIFY_PEER},
     x509::X509_FILETYPE_PEM,
-};
-use kafka::{
-    client::SecurityConfig,
-    consumer::Consumer
 };
 
 use opus::{
@@ -45,7 +42,7 @@ use opus::{
 };
 
 #[derive(Debug, Deserialize)]
-struct Config<'a>{
+struct Config<'a> {
     khost: Vec<String>,
     topic: String,
     #[serde(borrow)]
@@ -117,20 +114,15 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
-        .arg(
-            Arg::with_name("print")
-                .short("p")
-                .long("printing")
-        )
-        .arg(
-            Arg::with_name("ingest")
-                .short("i")
-                .long("ingestion")
-        )
+        .arg(Arg::with_name("print").short("p").long("printing"))
+        .arg(Arg::with_name("ingest").short("i").long("ingestion"))
         .get_matches();
 
     let mut cfg_data = Vec::new();
-    File::open(args.value_of("cfg").unwrap()).unwrap().read_to_end(&mut cfg_data).unwrap();
+    File::open(args.value_of("cfg").unwrap())
+        .unwrap()
+        .read_to_end(&mut cfg_data)
+        .unwrap();
 
     let cfg = toml::from_slice::<Config>(&cfg_data).unwrap();
 
@@ -147,13 +139,19 @@ fn main() {
     let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
     {
         let mut pem = Vec::new();
-        File::open(cfg.ssl.key_file).unwrap().read_to_end(&mut pem).unwrap();
+        File::open(cfg.ssl.key_file)
+            .unwrap()
+            .read_to_end(&mut pem)
+            .unwrap();
 
         let ctx = &mut builder as &mut SslContextBuilder;
         ctx.set_cipher_list("DEFAULT").unwrap();
         ctx.set_ca_file(cfg.ssl.ca_file).unwrap();
-        ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM).unwrap();
-        ctx.set_private_key(&PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap()).unwrap();
+        ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM)
+            .unwrap();
+        ctx.set_private_key(
+            &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap(),
+        ).unwrap();
         ctx.set_default_verify_paths().unwrap();
         ctx.set_verify(SSL_VERIFY_PEER);
     }
