@@ -1,25 +1,30 @@
-extern crate kafka;
-extern crate opus;
-extern crate prometheus;
 #[macro_use]
 extern crate clap;
-extern crate ctrlc;
-extern crate serde_json;
-extern crate toml;
-extern crate serde;
+#[macro_use]
+extern crate maplit;
 #[macro_use]
 extern crate serde_derive;
-extern crate log;
+extern crate ctrlc;
 extern crate env_logger;
+extern crate kafka;
+extern crate log;
 extern crate openssl;
+extern crate opus;
+extern crate prometheus;
+extern crate serde;
+extern crate serde_json;
+extern crate toml;
 
 use std::{
+    collections::HashMap,
     fs::File,
     io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
         Arc,
-    }
+    },
+    thread,
 };
 
 use clap::Arg;
@@ -33,7 +38,11 @@ use kafka::{
     consumer::Consumer
 };
 
-use opus::{cfg, engine, trace::cadets::TraceEvent};
+use opus::{
+    cfg, engine,
+    trace::cadets::TraceEvent,
+    views::{DBTr, View, ViewInst},
+};
 
 #[derive(Debug, Deserialize)]
 struct Config<'a>{
@@ -58,6 +67,44 @@ struct SSLConfig<'a> {
     cert_file: &'a str,
     key_file: &'a str,
     key_pass: &'a str,
+}
+
+#[derive(Debug)]
+pub struct CDMView {
+    id: usize,
+}
+
+impl View for CDMView {
+    fn new(id: usize) -> CDMView {
+        CDMView { id }
+    }
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn name(&self) -> &'static str {
+        "CDMView"
+    }
+    fn desc(&self) -> &'static str {
+        "View for producing CDM data to kafka."
+    }
+    fn params(&self) -> HashMap<&'static str, &'static str> {
+        hashmap!()
+    }
+    fn create(
+        &self,
+        id: usize,
+        params: HashMap<String, String>,
+        _cfg: &cfg::Config,
+        _stream: Receiver<Arc<DBTr>>,
+    ) -> ViewInst {
+        let thr = thread::spawn(move || {});
+        ViewInst {
+            id,
+            vtype: self.id,
+            params,
+            handle: thr,
+        }
+    }
 }
 
 fn main() {
@@ -135,6 +182,18 @@ fn main() {
             .unwrap()
             .init_pipeline()
             .expect("Failed to init pipeline");
+
+        let cdm_view_id = engine
+            .as_mut()
+            .unwrap()
+            .register_view_type::<CDMView>()
+            .unwrap();
+
+        engine
+            .as_mut()
+            .unwrap()
+            .create_view_by_id(cdm_view_id, hashmap!())
+            .unwrap();
     }
 
     while running.load(Ordering::SeqCst) {

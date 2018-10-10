@@ -360,6 +360,7 @@ dependencies = [
  "kafka 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libopus 0.1.0",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "maplit 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "prometheus 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
