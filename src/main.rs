@@ -28,7 +28,10 @@ use std::{
 };
 
 use clap::Arg;
-use kafka::{client::SecurityConfig, consumer::Consumer};
+use kafka::{
+    client::{FetchOffset, SecurityConfig},
+    consumer::Consumer,
+};
 use openssl::{
     pkey::PKey,
     ssl::{SslConnectorBuilder, SslContextBuilder, SslMethod, SSL_VERIFY_PEER},
@@ -117,6 +120,7 @@ fn main() {
         .arg(Arg::with_name("print").short("p").long("printing"))
         .arg(Arg::with_name("ingest").short("i").long("ingestion"))
         .arg(Arg::with_name("secure").short("s").long("secure"))
+        .arg(Arg::with_name("current").short("c").long("current"))
         .get_matches();
 
     let mut cfg_data = Vec::new();
@@ -131,6 +135,14 @@ fn main() {
     let ingest = args.is_present("ingest");
     let secure = args.is_present("secure");
 
+    let fetch_off = {
+        if args.is_present("current") {
+            FetchOffset::Latest
+        } else {
+            FetchOffset::Earliest
+        }
+    };
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
@@ -138,41 +150,38 @@ fn main() {
     }).expect("Error setting Ctrl-C handler");
 
     let mut kafka = {
-        if secure {
-            // OpenSSL offers a variety of complex configurations. Here is an example:
-            let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
-            {
-                let mut pem = Vec::new();
-                File::open(cfg.ssl.key_file)
-                    .unwrap()
-                    .read_to_end(&mut pem)
-                    .unwrap();
+        // OpenSSL offers a variety of complex configurations. Here is an example:
+        let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
+        {
+            let mut pem = Vec::new();
+            File::open(cfg.ssl.key_file)
+                .unwrap()
+                .read_to_end(&mut pem)
+                .unwrap();
 
-                let ctx = &mut builder as &mut SslContextBuilder;
-                ctx.set_cipher_list("DEFAULT").unwrap();
-                ctx.set_ca_file(cfg.ssl.ca_file).unwrap();
-                ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM)
-                    .unwrap();
-                ctx.set_private_key(
-                    &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes())
-                        .unwrap(),
-                ).unwrap();
-                ctx.set_default_verify_paths().unwrap();
-                ctx.set_verify(SSL_VERIFY_PEER);
-            }
-            let connector = builder.build();
-
-            Consumer::from_hosts(cfg.khost)
-                .with_topic(cfg.topic)
-                .with_security(SecurityConfig::new(connector).with_hostname_verification(false))
-                .create()
-                .expect("Failed to create kafka client")
-        } else {
-            Consumer::from_hosts(cfg.khost)
-                .with_topic(cfg.topic)
-                .create()
-                .expect("Failed to create kafka client")
+            let ctx = &mut builder as &mut SslContextBuilder;
+            ctx.set_cipher_list("DEFAULT").unwrap();
+            ctx.set_ca_file(cfg.ssl.ca_file).unwrap();
+            ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM)
+                .unwrap();
+            ctx.set_private_key(
+                &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap(),
+            ).unwrap();
+            ctx.set_default_verify_paths().unwrap();
+            ctx.set_verify(SSL_VERIFY_PEER);
         }
+        let connector = builder.build();
+
+        let kbuilder = Consumer::from_hosts(cfg.khost)
+            .with_topic(cfg.topic)
+            .with_fallback_offset(fetch_off);
+
+        if secure {
+            kbuilder.with_security(SecurityConfig::new(connector).with_hostname_verification(false))
+        } else {
+            kbuilder
+        }.create()
+            .expect("Failed to create kafka client")
     };
 
     let mut engine = None;
