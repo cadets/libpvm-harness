@@ -137,7 +137,6 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-
     let mut kafka = {
         if secure {
             // OpenSSL offers a variety of complex configurations. Here is an example:
@@ -155,7 +154,8 @@ fn main() {
                 ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM)
                     .unwrap();
                 ctx.set_private_key(
-                    &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap(),
+                    &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes())
+                        .unwrap(),
                 ).unwrap();
                 ctx.set_default_verify_paths().unwrap();
                 ctx.set_verify(SSL_VERIFY_PEER);
@@ -164,7 +164,7 @@ fn main() {
 
             Consumer::from_hosts(cfg.khost)
                 .with_topic(cfg.topic)
-                .with_security(SecurityConfig::new(connector))
+                .with_security(SecurityConfig::new(connector).with_hostname_verification(false))
                 .create()
                 .expect("Failed to create kafka client")
         } else {
