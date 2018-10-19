@@ -121,6 +121,7 @@ fn main() {
         .arg(Arg::with_name("ingest").short("i").long("ingestion"))
         .arg(Arg::with_name("secure").short("s").long("secure"))
         .arg(Arg::with_name("current").short("c").long("current"))
+
         .get_matches();
 
     let mut cfg_data = Vec::new();
@@ -202,7 +203,7 @@ fn main() {
             .init_pipeline()
             .expect("Failed to init pipeline");
 
-        let cdm_view_id = engine
+        /*let cdm_view_id = engine
             .as_mut()
             .unwrap()
             .register_view_type::<CDMView>()
@@ -212,6 +213,12 @@ fn main() {
             .as_mut()
             .unwrap()
             .create_view_by_id(cdm_view_id, hashmap!())
+            .unwrap();*/
+
+        engine
+            .as_mut()
+            .unwrap()
+            .init_record::<TraceEvent>()
             .unwrap();
     }
 
