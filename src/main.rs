@@ -121,7 +121,7 @@ fn main() {
         .arg(Arg::with_name("ingest").short("i").long("ingestion"))
         .arg(Arg::with_name("secure").short("s").long("secure"))
         .arg(Arg::with_name("current").short("c").long("current"))
-
+        .arg(Arg::with_name("nofollow").long("no-follow"))
         .get_matches();
 
     let mut cfg_data = Vec::new();
@@ -135,6 +135,7 @@ fn main() {
     let print = args.is_present("print");
     let ingest = args.is_present("ingest");
     let secure = args.is_present("secure");
+    let nofollow = args.is_present("no-follow");
 
     let fetch_off = {
         if args.is_present("current") {
@@ -226,7 +227,11 @@ fn main() {
         match kafka.poll() {
             Ok(mss) => {
                 if mss.is_empty() {
-                    continue;
+                    if nofollow{
+                        break;
+                    } else {
+                        continue;
+                    }
                 } else {
                     for ms in mss.iter() {
                         for m in ms.messages() {
