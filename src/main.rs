@@ -135,7 +135,7 @@ fn main() {
     let print = args.is_present("print");
     let ingest = args.is_present("ingest");
     let secure = args.is_present("secure");
-    let nofollow = args.is_present("no-follow");
+    let nofollow = args.is_present("nofollow");
 
     let fetch_off = {
         if args.is_present("current") {
