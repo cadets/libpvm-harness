@@ -17,3 +17,6 @@ serde = "1.0"
 serde_derive = "1.0"
 toml = "0.4"
 maplit = "1.0"
+uuid = { version = "0.6", features = ["serde", "v5"] }
+avro-rs = { path = "modules/avro-rs" }
+lazy_static = "*"

@@ -1,9 +1,12 @@
+extern crate avro_rs;
 #[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate maplit;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate lazy_static;
 extern crate ctrlc;
 extern crate env_logger;
 extern crate kafka;
@@ -14,17 +17,17 @@ extern crate prometheus;
 extern crate serde;
 extern crate serde_json;
 extern crate toml;
+extern crate uuid;
+
+mod cdm_view;
 
 use std::{
-    collections::HashMap,
     fs::File,
     io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
         Arc,
     },
-    thread,
 };
 
 use clap::Arg;
@@ -38,11 +41,9 @@ use openssl::{
     x509::X509_FILETYPE_PEM,
 };
 
-use opus::{
-    cfg, engine,
-    trace::cadets::TraceEvent,
-    views::{DBTr, View, ViewInst},
-};
+use opus::{cfg, engine, trace::cadets::TraceEvent};
+
+use cdm_view::CDMView;
 
 #[derive(Debug, Deserialize)]
 struct Config<'a> {
@@ -67,44 +68,6 @@ struct SSLConfig<'a> {
     cert_file: &'a str,
     key_file: &'a str,
     key_pass: &'a str,
-}
-
-#[derive(Debug)]
-pub struct CDMView {
-    id: usize,
-}
-
-impl View for CDMView {
-    fn new(id: usize) -> CDMView {
-        CDMView { id }
-    }
-    fn id(&self) -> usize {
-        self.id
-    }
-    fn name(&self) -> &'static str {
-        "CDMView"
-    }
-    fn desc(&self) -> &'static str {
-        "View for producing CDM data to kafka."
-    }
-    fn params(&self) -> HashMap<&'static str, &'static str> {
-        hashmap!()
-    }
-    fn create(
-        &self,
-        id: usize,
-        params: HashMap<String, String>,
-        _cfg: &cfg::Config,
-        _stream: Receiver<Arc<DBTr>>,
-    ) -> ViewInst {
-        let thr = thread::spawn(move || {});
-        ViewInst {
-            id,
-            vtype: self.id,
-            params,
-            handle: thr,
-        }
-    }
 }
 
 fn main() {
@@ -149,7 +112,8 @@ fn main() {
     let r = running.clone();
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let mut kafka = {
         // OpenSSL offers a variety of complex configurations. Here is an example:
@@ -168,7 +132,8 @@ fn main() {
                 .unwrap();
             ctx.set_private_key(
                 &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
             ctx.set_default_verify_paths().unwrap();
             ctx.set_verify(SSL_VERIFY_PEER);
         }
@@ -182,8 +147,9 @@ fn main() {
             kbuilder.with_security(SecurityConfig::new(connector).with_hostname_verification(false))
         } else {
             kbuilder
-        }.create()
-            .expect("Failed to create kafka client")
+        }
+        .create()
+        .expect("Failed to create kafka client")
     };
 
     let mut engine = None;
@@ -204,7 +170,7 @@ fn main() {
             .init_pipeline()
             .expect("Failed to init pipeline");
 
-        /*let cdm_view_id = engine
+        let cdm_view_id = engine
             .as_mut()
             .unwrap()
             .register_view_type::<CDMView>()
@@ -214,7 +180,7 @@ fn main() {
             .as_mut()
             .unwrap()
             .create_view_by_id(cdm_view_id, hashmap!())
-            .unwrap();*/
+            .unwrap();
 
         engine
             .as_mut()
@@ -227,7 +193,7 @@ fn main() {
         match kafka.poll() {
             Ok(mss) => {
                 if mss.is_empty() {
-                    if nofollow{
+                    if nofollow {
                         break;
                     } else {
                         continue;

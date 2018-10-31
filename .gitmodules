@@ -1,3 +1,6 @@
 [submodule "modules/libpvm-rs"]
 	path = modules/libpvm-rs
-	url = git@github.com:cadets/libpvm-rs.git
+	url = https://github.com/cadets/libpvm-rs.git
+[submodule "modules/avro-rs"]
+	path = modules/avro-rs
+	url = https://github.com/HarkonenBade/avro-rs.git
