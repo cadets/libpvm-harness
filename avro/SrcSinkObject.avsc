@@ -1,7 +1,7 @@
 {
   "type" : "record",
   "name" : "SrcSinkObject",
-  "namespace" : "com.bbn.tc.schema.avro.cdm19",
+  "namespace" : "com.bbn.tc.schema.avro.cdm20",
   "doc" : "* Represents a generic source or sink on the host device that is can be a file, memory, or netflow.\n     * This is the most basic representation of a source or sink, basically specifying its type only.",
   "fields" : [ {
     "name" : "uuid",

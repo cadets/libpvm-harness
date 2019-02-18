@@ -1,7 +1,7 @@
 {
   "type" : "record",
   "name" : "ProvenanceTagNode",
-  "namespace" : "com.bbn.tc.schema.avro.cdm19",
+  "namespace" : "com.bbn.tc.schema.avro.cdm20",
   "doc" : "* A provenance tag defines source dependence on specific data sources (inputs).\n     * A tag identifier is typically bound to a source and used by the tracking system to\n     * capture dependence on this source input.\n     *\n     * ProvenanceTagNode defines one step of provenance for a value\n     * (i.e., one read from a source or write to a sink), a reference\n     * to the previous provenance of the value (if any), and the tag\n     * operation that resulted the tagId of this ProvenanceTagNode",
   "fields" : [ {
     "name" : "tagId",

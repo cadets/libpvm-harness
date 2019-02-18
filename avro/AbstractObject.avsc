@@ -1,7 +1,7 @@
 {
   "type" : "record",
   "name" : "AbstractObject",
-  "namespace" : "com.bbn.tc.schema.avro.cdm19",
+  "namespace" : "com.bbn.tc.schema.avro.cdm20",
   "doc" : "*  Objects, in general, represent data sources and sinks which\n     *  could include sockets, files, memory, and any data in general\n     *  that can be an input and/or output to an event.  This record\n     *  is intended to be abstract i.e., one should not instantiate an\n     *  Object but rather instantiate one of its sub types (ie,\n     *  encapsulating records) FileObject, UnnamedPipeObject,\n     *  RegistryKeyObject, NetFlowObject, MemoryObject, or\n     *  SrcSinkObject.",
   "fields" : [ {
     "name" : "permission",

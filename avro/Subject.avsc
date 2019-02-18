@@ -1,7 +1,7 @@
 {
   "type" : "record",
   "name" : "Subject",
-  "namespace" : "com.bbn.tc.schema.avro.cdm19",
+  "namespace" : "com.bbn.tc.schema.avro.cdm20",
   "doc" : "* Subjects represent execution contexts and include mainly threads and processes. They can be more granular and\n     * can represent other execution boundaries such as units and blocks if needed.",
   "fields" : [ {
     "name" : "uuid",
@@ -18,7 +18,7 @@
       "type" : "enum",
       "name" : "SubjectType",
       "doc" : "* SubjectType enumerates the types of execution contexts supported.\n     *\n     * SUBJECT_PROCESS,    process\n     * SUBJECT_THREAD,     thread within a process\n     * SUBJECT_UNIT        so far we only know of TRACE BEEP using this",
-      "symbols" : [ "SUBJECT_PROCESS", "SUBJECT_THREAD", "SUBJECT_UNIT", "SUBJECT_BASIC_BLOCK" ]
+      "symbols" : [ "SUBJECT_PROCESS", "SUBJECT_THREAD", "SUBJECT_UNIT", "SUBJECT_BASIC_BLOCK", "SUBJECT_OTHER" ]
     },
     "doc" : "the subject type"
   }, {
