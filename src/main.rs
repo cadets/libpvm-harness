@@ -47,12 +47,19 @@ use cdm_view::CDMView;
 
 #[derive(Debug, Deserialize)]
 struct Config<'a> {
-    khost: Vec<String>,
-    topic: String,
     #[serde(borrow)]
-    neo4j: Neo4jConfig<'a>,
+    kafka: Option<KafkaConfig<'a>>,
+    src_file: Option<String>,
     #[serde(borrow)]
-    ssl: SSLConfig<'a>,
+    neo4j: Option<Neo4jConfig<'a>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KafkaConfig<'a> {
+    khost: Vec<&'a str>,
+    topic: &'a str,
+    #[serde(borrow)]
+    ssl: Option<SSLConfig<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,9 +87,6 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
-        .arg(Arg::with_name("print").short("p").long("printing"))
-        .arg(Arg::with_name("ingest").short("i").long("ingestion"))
-        .arg(Arg::with_name("secure").short("s").long("secure"))
         .arg(Arg::with_name("current").short("c").long("current"))
         .arg(Arg::with_name("nofollow").long("no-follow"))
         .get_matches();
@@ -95,126 +99,105 @@ fn main() {
 
     let cfg = toml::from_slice::<Config>(&cfg_data).unwrap();
 
-    let print = args.is_present("print");
-    let ingest = args.is_present("ingest");
-    let secure = args.is_present("secure");
-    let nofollow = args.is_present("nofollow");
-
-    let fetch_off = {
-        if args.is_present("current") {
-            FetchOffset::Latest
-        } else {
-            FetchOffset::Earliest
-        }
+    let mut engine = if let Some(ref neo4j) = cfg.neo4j {
+        engine::Engine::new(cfg::Config {
+            cfg_mode: cfg::CfgMode::Auto,
+            db_server: neo4j.db_host.to_string(),
+            db_user: neo4j.db_user.to_string(),
+            db_password: neo4j.db_pass.to_string(),
+            suppress_default_views: false,
+            cfg_detail: None,
+        })
+    } else {
+        engine::Engine::new(cfg::Config {
+            cfg_mode: cfg::CfgMode::Auto,
+            db_server: "".to_string(),
+            db_user: "".to_string(),
+            db_password: "".to_string(),
+            suppress_default_views: true,
+            cfg_detail: None,
+        })
     };
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    engine.init_pipeline().expect("Failed to init pipeline");
 
-    let mut kafka = {
-        // OpenSSL offers a variety of complex configurations. Here is an example:
-        let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
-        {
-            let mut pem = Vec::new();
-            File::open(cfg.ssl.key_file)
-                .unwrap()
-                .read_to_end(&mut pem)
-                .unwrap();
+    let cdm_view_id = engine.register_view_type::<CDMView>().unwrap();
 
-            let ctx = &mut builder as &mut SslContextBuilder;
-            ctx.set_cipher_list("DEFAULT").unwrap();
-            ctx.set_ca_file(cfg.ssl.ca_file).unwrap();
-            ctx.set_certificate_file(cfg.ssl.cert_file, X509_FILETYPE_PEM)
-                .unwrap();
-            ctx.set_private_key(
-                &PKey::private_key_from_pem_passphrase(&pem, cfg.ssl.key_pass.as_bytes()).unwrap(),
-            )
+    engine.create_view_by_id(cdm_view_id, hashmap!("cdm_file".to_string() => Box::new("cdm.bin".to_string()) as Box<std::any::Any>)).unwrap();
+
+    engine.init_record::<TraceEvent>().unwrap();
+
+    if let Some(src_file) = cfg.src_file {
+        engine
+            .ingest_stream(File::open(src_file).unwrap().into())
             .unwrap();
-            ctx.set_default_verify_paths().unwrap();
-            ctx.set_verify(SSL_VERIFY_PEER);
-        }
-        let connector = builder.build();
+    } else if let Some(kafka) = cfg.kafka {
+        let nofollow = args.is_present("nofollow");
 
-        let kbuilder = Consumer::from_hosts(cfg.khost)
-            .with_topic(cfg.topic)
+        let fetch_off = {
+            if args.is_present("current") {
+                FetchOffset::Latest
+            } else {
+                FetchOffset::Earliest
+            }
+        };
+
+        let kbuilder = Consumer::from_hosts(kafka.khost.iter().map(|x| x.to_string()).collect())
+            .with_topic(kafka.topic.to_string())
             .with_fallback_offset(fetch_off);
 
-        if secure {
+        let mut kafka = if let Some(ssl) = kafka.ssl {
+            // OpenSSL offers a variety of complex configurations. Here is an example:
+            let mut builder = SslConnectorBuilder::new(SslMethod::tls()).unwrap();
+            {
+                let mut pem = Vec::new();
+                File::open(ssl.key_file)
+                    .unwrap()
+                    .read_to_end(&mut pem)
+                    .unwrap();
+
+                let ctx = &mut builder as &mut SslContextBuilder;
+                ctx.set_cipher_list("DEFAULT").unwrap();
+                ctx.set_ca_file(ssl.ca_file).unwrap();
+                ctx.set_certificate_file(ssl.cert_file, X509_FILETYPE_PEM)
+                    .unwrap();
+                ctx.set_private_key(
+                    &PKey::private_key_from_pem_passphrase(&pem, ssl.key_pass.as_bytes()).unwrap(),
+                )
+                .unwrap();
+                ctx.set_default_verify_paths().unwrap();
+                ctx.set_verify(SSL_VERIFY_PEER);
+            }
+            let connector = builder.build();
+
             kbuilder.with_security(SecurityConfig::new(connector).with_hostname_verification(false))
         } else {
             kbuilder
         }
         .create()
-        .expect("Failed to create kafka client")
-    };
+        .expect("Failed to create kafka client");
 
-    let mut engine = None;
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+        ctrlc::set_handler(move || {
+            r.store(false, Ordering::SeqCst);
+        })
+        .expect("Error setting Ctrl-C handler");
 
-    if ingest {
-        engine = Some(engine::Engine::new(cfg::Config {
-            cfg_mode: cfg::CfgMode::Auto,
-            db_server: cfg.neo4j.db_host.to_string(),
-            db_user: cfg.neo4j.db_user.to_string(),
-            db_password: cfg.neo4j.db_pass.to_string(),
-            suppress_default_views: false,
-            cfg_detail: None,
-        }));
-
-        engine
-            .as_mut()
-            .unwrap()
-            .init_pipeline()
-            .expect("Failed to init pipeline");
-
-        let cdm_view_id = engine
-            .as_mut()
-            .unwrap()
-            .register_view_type::<CDMView>()
-            .unwrap();
-
-        engine
-            .as_mut()
-            .unwrap()
-            .create_view_by_id(cdm_view_id, hashmap!())
-            .unwrap();
-
-        engine
-            .as_mut()
-            .unwrap()
-            .init_record::<TraceEvent>()
-            .unwrap();
-    }
-
-    while running.load(Ordering::SeqCst) {
-        match kafka.poll() {
-            Ok(mss) => {
-                if mss.is_empty() {
-                    if nofollow {
-                        break;
+        while running.load(Ordering::SeqCst) {
+            match kafka.poll() {
+                Ok(mss) => {
+                    if mss.is_empty() {
+                        if nofollow {
+                            break;
+                        } else {
+                            continue;
+                        }
                     } else {
-                        continue;
-                    }
-                } else {
-                    for ms in mss.iter() {
-                        for m in ms.messages() {
-                            if print {
-                                println!(
-                                    "Topic: {}, Partition: {}, Offset: {}, Key: {}, Value: {}",
-                                    ms.topic(),
-                                    ms.partition(),
-                                    m.offset,
-                                    String::from_utf8_lossy(m.key),
-                                    String::from_utf8_lossy(m.value)
-                                );
-                            }
-                            if ingest {
-                                let eng = engine.as_mut().unwrap();
+                        for ms in mss.iter() {
+                            for m in ms.messages() {
                                 match serde_json::from_slice::<TraceEvent>(m.value) {
-                                    Ok(ref tr) => match eng.ingest_record(tr) {
+                                    Ok(ref tr) => match engine.ingest_record(tr) {
                                         Ok(_) => (),
                                         Err(e) => {
                                             eprintln!("Offset: {}", m.offset);
@@ -229,26 +212,25 @@ fn main() {
                                     }
                                 }
                             }
-                        }
-                        match kafka.consume_messageset(ms) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                eprintln!("Error: {}", e);
+                            match kafka.consume_messageset(ms) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                }
                             }
                         }
                     }
                 }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                }
             }
         }
+    } else {
+        eprintln!("Please supply either kafka or src_file details in your cfg file.")
     }
-    if ingest {
-        engine
-            .as_mut()
-            .unwrap()
-            .shutdown_pipeline()
-            .expect("Failed to shutdown pipeline");
-    }
+
+    engine
+        .shutdown_pipeline()
+        .expect("Failed to shutdown pipeline");
 }

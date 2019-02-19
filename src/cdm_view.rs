@@ -441,8 +441,6 @@ pub struct CDMView {
     id: usize,
 }
 
-use std::fs;
-
 impl View for CDMView {
     fn new(id: usize) -> CDMView {
         CDMView { id }
@@ -457,7 +455,7 @@ impl View for CDMView {
         "View for producing CDM data to kafka."
     }
     fn params(&self) -> HashMap<&'static str, &'static str> {
-        hashmap!()
+        hashmap!("cdm_file" => "CDM file location")
     }
     fn create(
         &self,
@@ -466,8 +464,12 @@ impl View for CDMView {
         _cfg: &cfg::Config,
         stream: Receiver<Arc<DBTr>>,
     ) -> ViewInst {
+        let cdm_path = params["cdm_file"]
+            .downcast_ref::<String>()
+            .unwrap()
+            .to_string();
         let thr = thread::spawn(move || {
-            let mut writer = Writer::new(&TC_CDM_DATUM_SCHEMATA, File::create("cdm.bin").unwrap());
+            let mut writer = Writer::new(&TC_CDM_DATUM_SCHEMATA, File::create(cdm_path).unwrap());
 
             writer
                 .append(Record::Host(Host {
