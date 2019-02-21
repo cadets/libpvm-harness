@@ -41,7 +41,7 @@ use openssl::{
     x509::X509_FILETYPE_PEM,
 };
 
-use opus::{cfg, engine, trace::cadets::TraceEvent};
+use opus::{cfg, engine, trace::cadets::TraceEvent, ingest::Parseable};
 
 use cdm_view::CDMView;
 
@@ -197,12 +197,15 @@ fn main() {
                         for ms in mss.iter() {
                             for m in ms.messages() {
                                 match serde_json::from_slice::<TraceEvent>(m.value) {
-                                    Ok(ref tr) => match engine.ingest_record(tr) {
-                                        Ok(_) => (),
-                                        Err(e) => {
-                                            eprintln!("Offset: {}", m.offset);
-                                            eprintln!("PVM error: {}", e);
-                                            eprintln!("{}", tr);
+                                    Ok(mut tr) => {
+                                        tr.set_offset(m.offset as usize);
+                                        match engine.ingest_record(&tr) {
+                                            Ok(_) => (),
+                                            Err(e) => {
+                                                eprintln!("Offset: {}", m.offset);
+                                                eprintln!("PVM error: {}", e);
+                                                eprintln!("{}", tr);
+                                            }
                                         }
                                     },
                                     Err(perr) => {
