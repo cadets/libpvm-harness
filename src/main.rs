@@ -1,24 +1,3 @@
-extern crate avro_rs;
-#[macro_use]
-extern crate clap;
-#[macro_use]
-extern crate maplit;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate lazy_static;
-extern crate ctrlc;
-extern crate env_logger;
-extern crate kafka;
-extern crate log;
-extern crate openssl;
-extern crate opus;
-extern crate prometheus;
-extern crate serde;
-extern crate serde_json;
-extern crate toml;
-extern crate uuid;
-
 mod cdm_view;
 
 use std::{
@@ -30,16 +9,18 @@ use std::{
     },
 };
 
-use clap::Arg;
+use clap::{Arg, app_from_crate, crate_name, crate_authors, crate_description, crate_version};
 use kafka::{
     client::{FetchOffset, SecurityConfig},
     consumer::Consumer,
 };
+use maplit::hashmap;
 use openssl::{
     pkey::PKey,
     ssl::{SslConnectorBuilder, SslContextBuilder, SslMethod, SSL_VERIFY_PEER},
     x509::X509_FILETYPE_PEM,
 };
+use serde::Deserialize;
 
 use opus::{cfg, engine, trace::cadets::TraceEvent, ingest::Parseable};
 

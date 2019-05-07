@@ -23,6 +23,8 @@ use avro_rs::{
     types::{Record as AvroRecord, ToAvro, Value as AvroValue},
     Schema, Writer,
 };
+use lazy_static::lazy_static;
+use maplit::{convert_args, hashmap};
 
 fn load_schema(src: &'static str) -> Schema {
     let mut schema_data = String::new();
