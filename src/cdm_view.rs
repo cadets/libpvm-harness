@@ -49,7 +49,7 @@ lazy_static! {
 const CDMVERSION: &str = "20";
 
 fn mkuuid(id: ID) -> Uuid {
-    Uuid::new_v5(&Uuid::nil(), &format!("{:?}", id))
+    Uuid::new_v5(&Uuid::nil(), &u64::to_ne_bytes(id.inner()))
 }
 
 struct UuidW(Uuid);
@@ -317,16 +317,16 @@ fn dbtr_to_avro(val: &DBTr) -> impl ToAvro {
                     ty: SubjectType::Other,
                     properties: convert_args!(hashmap!("type" => "Node;Actor",
                                                                                "schema" => d.ty().name,
-                                                                               "uuid" => d.uuid().hyphenated().to_string(),
-                                                                               "ctx" => mkuuid(d.ctx()).hyphenated().to_string())),
+                                                                               "uuid" => d.uuid().to_hyphenated_ref().to_string(),
+                                                                               "ctx" => mkuuid(d.ctx()).to_hyphenated_ref().to_string())),
                 }),
                 PVMDataType::Store => Record::SrcSinkObject(SrcSinkObject {
                     uuid: mkuuid(d.get_db_id()),
                     base_object: AbstractObject {
                         properties: convert_args!(hashmap!("type" => "Node;Object;Store",
                                                                                    "schema" => d.ty().name,
-                                                                                   "uuid" => d.uuid().hyphenated().to_string(),
-                                                                                   "ctx" => mkuuid(d.ctx()).hyphenated().to_string())),
+                                                                                   "uuid" => d.uuid().to_hyphenated_ref().to_string(),
+                                                                                   "ctx" => mkuuid(d.ctx()).to_hyphenated_ref().to_string())),
                     },
                     ty: SrcSinkType::Unknown,
                 }),
@@ -335,8 +335,8 @@ fn dbtr_to_avro(val: &DBTr) -> impl ToAvro {
                     base_object: AbstractObject {
                         properties: convert_args!(hashmap!("type" => "Node;Object;Conduit",
                                                                                    "schema" => d.ty().name,
-                                                                                   "uuid" => d.uuid().hyphenated().to_string(),
-                                                                                   "ctx" => mkuuid(d.ctx()).hyphenated().to_string())),
+                                                                                   "uuid" => d.uuid().to_hyphenated_ref().to_string(),
+                                                                                   "ctx" => mkuuid(d.ctx()).to_hyphenated_ref().to_string())),
                     },
                     ty: SrcSinkType::Unknown,
                 }),
@@ -345,8 +345,8 @@ fn dbtr_to_avro(val: &DBTr) -> impl ToAvro {
                     base_object: AbstractObject {
                         properties: convert_args!(hashmap!("type" => "Node;Object;EditSession",
                                                                                    "schema" => d.ty().name,
-                                                                                   "uuid" => d.uuid().hyphenated().to_string(),
-                                                                                   "ctx" => mkuuid(d.ctx()).hyphenated().to_string())),
+                                                                                   "uuid" => d.uuid().to_hyphenated_ref().to_string(),
+                                                                                   "ctx" => mkuuid(d.ctx()).to_hyphenated_ref().to_string())),
                     },
                     ty: SrcSinkType::Unknown,
                 }),
@@ -421,7 +421,7 @@ fn dbtr_to_avro(val: &DBTr) -> impl ToAvro {
                 predicate_object2: Some(mkuuid(r.get_dst())),
                 timestamp_nanos: 0,
                 properties: convert_args!(hashmap!("type" => "INF",
-                                                                       "ctx" => mkuuid(i.ctx).hyphenated().to_string())),
+                                                                       "ctx" => mkuuid(i.ctx).to_hyphenated_ref().to_string())),
             }),
             Rel::Named(ref n) => Record::Event(Event {
                 uuid: mkuuid(r.get_db_id()),
@@ -431,8 +431,8 @@ fn dbtr_to_avro(val: &DBTr) -> impl ToAvro {
                 predicate_object2: None,
                 timestamp_nanos: 0,
                 properties: convert_args!(hashmap!("type" => "NAMED",
-                                                                       "start" => mkuuid(n.start).hyphenated().to_string(),
-                                                                       "end" => mkuuid(n.end).hyphenated().to_string())),
+                                                                       "start" => mkuuid(n.start).to_hyphenated_ref().to_string(),
+                                                                       "end" => mkuuid(n.end).to_hyphenated_ref().to_string())),
             }),
         },
     }

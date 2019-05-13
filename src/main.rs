@@ -25,6 +25,7 @@ use serde::Deserialize;
 use opus::{cfg, engine, trace::cadets::TraceEvent, ingest::Parseable};
 
 use cdm_view::CDMView;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 struct Config<'a> {
@@ -179,6 +180,19 @@ fn main() {
                             for m in ms.messages() {
                                 match serde_json::from_slice::<TraceEvent>(m.value) {
                                     Ok(mut tr) => {
+                                        if let TraceEvent::Audit(ref mut e) = tr {
+                                            if let Some(host) = e.host {
+                                                let map_uuid = |u: Uuid| Uuid::new_v5(&host, u.as_bytes());
+
+                                                e.arg_objuuid1 = e.arg_objuuid1.map(map_uuid);
+                                                e.arg_objuuid2 = e.arg_objuuid2.map(map_uuid);
+                                                e.ret_objuuid1 = e.ret_objuuid1.map(map_uuid);
+                                                e.ret_objuuid2 = e.ret_objuuid2.map(map_uuid);
+                                                e.subjprocuuid = map_uuid(e.subjprocuuid);
+                                                e.subjthruuid = map_uuid(e.subjthruuid);
+                                            }
+                                        }
+
                                         tr.set_offset(m.offset as usize);
                                         match engine.ingest_record(&tr) {
                                             Ok(_) => (),
