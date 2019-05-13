@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use clap::{Arg, app_from_crate, crate_name, crate_authors, crate_description, crate_version};
+use clap::{app_from_crate, crate_authors, crate_description, crate_name, crate_version, Arg};
 use kafka::{
     client::{FetchOffset, SecurityConfig},
     consumer::Consumer,
@@ -22,7 +22,7 @@ use openssl::{
 };
 use serde::Deserialize;
 
-use opus::{cfg, engine, trace::cadets::TraceEvent, ingest::Parseable};
+use opus::{cfg, engine, ingest::Parseable, trace::cadets::TraceEvent};
 
 use cdm_view::CDMView;
 use uuid::Uuid;
@@ -31,7 +31,8 @@ use uuid::Uuid;
 struct Config<'a> {
     #[serde(borrow)]
     kafka: Option<KafkaConfig<'a>>,
-    src_file: Option<String>,
+    src_file: Option<&'a str>,
+    cdm_file: Option<&'a str>,
     #[serde(borrow)]
     neo4j: Option<Neo4jConfig<'a>>,
 }
@@ -103,17 +104,19 @@ fn main() {
 
     engine.init_pipeline().expect("Failed to init pipeline");
 
-    let cdm_view_id = engine.register_view_type::<CDMView>().unwrap();
+    if let Some(cdm_file) = cfg.cdm_file {
+        let cdm_view_id = engine.register_view_type::<CDMView>().unwrap();
 
-    engine.create_view_by_id(cdm_view_id, hashmap!("cdm_file".to_string() => Box::new("cdm.bin".to_string()) as Box<std::any::Any>)).unwrap();
-
-    engine.init_record::<TraceEvent>().unwrap();
+        engine.create_view_by_id(cdm_view_id, hashmap!("cdm_file".to_string() => Box::new(cdm_file.to_string()) as Box<std::any::Any>)).unwrap();
+    }
 
     if let Some(src_file) = cfg.src_file {
         engine
             .ingest_stream(File::open(src_file).unwrap().into())
             .unwrap();
     } else if let Some(kafka) = cfg.kafka {
+        engine.init_record::<TraceEvent>().unwrap();
+
         let nofollow = args.is_present("nofollow");
 
         let fetch_off = {
@@ -202,7 +205,7 @@ fn main() {
                                                 eprintln!("{}", tr);
                                             }
                                         }
-                                    },
+                                    }
                                     Err(perr) => {
                                         eprintln!("Offset: {}", m.offset);
                                         eprintln!("JSON Parsing error: {}", perr);
