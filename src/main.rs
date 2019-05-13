@@ -1,4 +1,5 @@
 mod cdm_view;
+mod process_tree;
 
 use std::{
     fs::File,
@@ -33,6 +34,7 @@ struct Config<'a> {
     kafka: Option<KafkaConfig<'a>>,
     src_file: Option<&'a str>,
     cdm_file: Option<&'a str>,
+    proc_tree: Option<&'a str>,
     #[serde(borrow)]
     neo4j: Option<Neo4jConfig<'a>>,
 }
@@ -108,6 +110,12 @@ fn main() {
         let cdm_view_id = engine.register_view_type::<CDMView>().unwrap();
 
         engine.create_view_by_id(cdm_view_id, hashmap!("cdm_file".to_string() => Box::new(cdm_file.to_string()) as Box<std::any::Any>)).unwrap();
+    }
+
+    if let Some(proc_tree) = cfg.proc_tree {
+        let view_id = engine.register_view_type::<process_tree::ProcTreeView>().unwrap();
+
+        engine.create_view_by_id(view_id, hashmap!("output".to_string() => Box::new(proc_tree.to_string()) as Box<std::any::Any>)).unwrap();
     }
 
     if let Some(src_file) = cfg.src_file {
