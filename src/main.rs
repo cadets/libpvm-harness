@@ -1,5 +1,6 @@
 mod cdm_view;
 mod process_tree;
+mod network_traffic;
 
 use std::{
     fs::File,
